@@ -1,42 +1,17 @@
 """
-src/train.py — Training loop using Unsloth + TRL SFTTrainer
+src/train.py — Training loop using HuggingFace transformers + PEFT + TRL
 
 Works for both LoRA (Phase 1) and QLoRA (Phase 2) based on config.
-Unsloth patches the model for ~2x faster LoRA training with lower VRAM.
 
 Paper hyperparams:
   - LoRA rank 8, lr 3e-5, batch 32, 5 epochs
   - Base model: meta-llama/Meta-Llama-3-8B-Instruct
-  - Trained with Unsloth + TRL
 """
 
-from unsloth import FastLanguageModel
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, TaskType
 from trl import SFTTrainer, SFTConfig
-
-
-# ──────────────────────────────────────────────
-# Load config from YAML
-# ──────────────────────────────────────────────
-
-def load_config(yaml_path: str = None) -> dict:
-    """
-    Loads a YAML config file and merges it with DEFAULT_CONFIG.
-    Values in the YAML override the defaults.
-
-    Args:
-        yaml_path: path to YAML file (e.g. "configs/lora_baseline.yaml")
-                   If None, returns DEFAULT_CONFIG as-is.
-    Returns:
-        dict of merged config values
-    """
-    if yaml_path is None:
-        return dict(DEFAULT_CONFIG)
-
-    import yaml
-    with open(yaml_path, "r") as f:
-        overrides = yaml.safe_load(f)
-
-    return {**DEFAULT_CONFIG, **(overrides or {})}
 
 
 # ──────────────────────────────────────────────
@@ -50,6 +25,9 @@ DEFAULT_CONFIG = {
 
     # Quantization (set load_in_4bit=True for QLoRA)
     "load_in_4bit": False,
+    "bnb_4bit_compute_dtype": "bfloat16",
+    "bnb_4bit_quant_type": "nf4",
+    "bnb_4bit_use_double_quant": True,
 
     # LoRA
     "lora_r": 8,
@@ -78,13 +56,38 @@ DEFAULT_CONFIG = {
 
 
 # ──────────────────────────────────────────────
-# Load model + tokenizer via Unsloth
+# Load config from YAML
+# ──────────────────────────────────────────────
+
+def load_config(yaml_path: str = None) -> dict:
+    """
+    Loads a YAML config file and merges it with DEFAULT_CONFIG.
+    Values in the YAML override the defaults.
+
+    Args:
+        yaml_path: path to YAML file (e.g. "configs/lora_baseline.yaml")
+                   If None, returns DEFAULT_CONFIG as-is.
+    Returns:
+        dict of merged config values
+    """
+    if yaml_path is None:
+        return dict(DEFAULT_CONFIG)
+
+    import yaml
+    with open(yaml_path, "r") as f:
+        overrides = yaml.safe_load(f)
+
+    return {**DEFAULT_CONFIG, **(overrides or {})}
+
+
+# ──────────────────────────────────────────────
+# Load model + tokenizer
 # ──────────────────────────────────────────────
 
 def load_model(config: dict = None):
     """
-    Loads the base model and tokenizer using Unsloth's FastLanguageModel.
-    Applies LoRA adapters.
+    Loads the base model and tokenizer using HuggingFace transformers + PEFT.
+    Applies LoRA adapters. Uses BitsAndBytes for QLoRA if load_in_4bit=True.
 
     Args:
         config: dict of hyperparams (uses DEFAULT_CONFIG if None)
@@ -94,21 +97,42 @@ def load_model(config: dict = None):
     """
     cfg = {**DEFAULT_CONFIG, **(config or {})}
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=cfg["model_name"],
-        max_seq_length=cfg["max_seq_length"],
-        load_in_4bit=cfg["load_in_4bit"],
-    )
+    # Tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
-    model = FastLanguageModel.get_peft_model(
-        model,
+    # Quantization config for QLoRA
+    bnb_config = None
+    if cfg["load_in_4bit"]:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=getattr(torch, cfg["bnb_4bit_compute_dtype"]),
+            bnb_4bit_quant_type=cfg["bnb_4bit_quant_type"],
+            bnb_4bit_use_double_quant=cfg["bnb_4bit_use_double_quant"],
+        )
+
+    # Model
+    model = AutoModelForCausalLM.from_pretrained(
+        cfg["model_name"],
+        quantization_config=bnb_config,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    )
+    model.config.use_cache = False
+    model.enable_input_require_grads()
+
+    # LoRA
+    lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
         r=cfg["lora_r"],
         lora_alpha=cfg["lora_alpha"],
         lora_dropout=cfg["lora_dropout"],
         target_modules=cfg["target_modules"],
-        use_gradient_checkpointing="unsloth",
-        random_state=cfg["seed"],
+        bias="none",
     )
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
 
     return model, tokenizer
 
@@ -169,5 +193,3 @@ def save_adapter(model, tokenizer, output_dir: str):
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     print(f"Adapter saved to {output_dir}")
-
-

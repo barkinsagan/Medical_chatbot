@@ -51,8 +51,7 @@ def generate_responses(
     Returns:
         DataFrame with columns: prompt, reference, generated, n_tokens, time_sec
     """
-    from unsloth import FastLanguageModel
-    FastLanguageModel.for_inference(model)
+    model.eval()
 
     # Subset if requested
     if n_samples is not None:
