@@ -174,7 +174,7 @@ def train(model, tokenizer, train_dataset, config: dict = None):
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=train_dataset,
         args=training_args,
     )
