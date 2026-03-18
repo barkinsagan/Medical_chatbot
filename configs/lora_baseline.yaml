@@ -1,6 +1,9 @@
 # configs/lora_baseline.yaml
 # Phase 1 — LoRA fine-tuning (matches paper)
-# Hardware: NVIDIA L4 (24GB VRAM) — tested at 16.94 GB peak with batch 2
+# Hardware: RTX 4090 (24GB VRAM)
+# NOTE: Full bf16 LoRA (no quantization) — LLaMA 3 8B weights alone take ~16GB.
+#       batch_size=2 is the safe limit; increasing it will likely OOM.
+#       Use qlora.yaml for larger batches / faster training on the 4090.
 #
 # Paper reference: Bayram et al. (2025)
 # DOI: 10.1145/3772000
@@ -27,7 +30,7 @@ target_modules:
 
 # ── Training ───────────────────────────────────
 # Effective batch = 2 * 16 = 32 (matches paper)
-# Kept batch_size=2 since L4 peaked at ~17GB with this setting
+# batch_size=2 is the ceiling for full bf16 LoRA on 24GB VRAM (~17GB peak)
 learning_rate: 3.0e-5
 per_device_train_batch_size: 2
 gradient_accumulation_steps: 16  # 2 * 16 = 32 effective

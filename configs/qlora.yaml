@@ -1,9 +1,9 @@
 # Phase 2 — QLoRA fine-tuning
 # Hardware: RTX 4090 (24GB VRAM)
 #
-# Same as lora_baseline.yaml but with 4-bit quantization.
-# This reduces VRAM usage, allowing either larger batch size
-# or longer sequences within the same 24GB budget.
+# Same as lora_baseline.yaml but with 4-bit NF4 quantization.
+# 4-bit LLaMA 3 8B takes ~4.5GB, leaving ~19GB headroom on the 4090.
+# This allows batch_size=8 (vs 2 in full LoRA) for faster training.
 
 # ── Model ──────────────────────────────────────
 model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -30,9 +30,10 @@ target_modules:
 
 # ── Training ───────────────────────────────────
 # Full 5-epoch run for Phase 2
+# batch_size=8 x grad_accum=4 = 32 effective (same as paper, faster on 4090)
 learning_rate: 3.0e-5
-per_device_train_batch_size: 4
-gradient_accumulation_steps: 8   # effective batch = 32
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 4   # effective batch = 32
 num_train_epochs: 5
 warmup_ratio: 0.03
 lr_scheduler_type: "cosine"

@@ -1,0 +1,35 @@
+# ── Installation order (local GPU) ─────────────────────────────────────────
+# 1. Install PyTorch for your CUDA version FIRST:
+#      CUDA 12.1/12.2:  pip install torch --index-url https://download.pytorch.org/whl/cu121
+#      CUDA 12.4:       pip install torch --index-url https://download.pytorch.org/whl/cu124
+#      CUDA 12.6:       pip install torch --index-url https://download.pytorch.org/whl/cu126
+#
+# 2. Install Unsloth for your CUDA + GPU arch (4090 = ampere):
+#      CUDA 12.1/12.2:  pip install "unsloth[cu121-ampere-torch240] @ git+https://github.com/unslothai/unsloth.git"
+#      CUDA 12.4:       pip install "unsloth[cu124-ampere-torch240] @ git+https://github.com/unslothai/unsloth.git"
+#
+# 3. Then: pip install -r requirements.txt
+# ───────────────────────────────────────────────────────────────────────────
+
+# Core training
+unsloth
+trl>=0.12.0
+peft>=0.13.0
+transformers>=4.46.0
+accelerate>=1.0.0
+bitsandbytes>=0.44.0   # required for QLoRA (load_in_4bit)
+
+# Data
+datasets>=3.0.0
+huggingface_hub>=0.25.0
+
+# Evaluation
+sentence-transformers>=3.0.0
+
+# Utilities
+# Install torch manually before running pip install -r requirements.txt:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.4.0
+pandas>=2.0.0
+tqdm>=4.0.0
+pyyaml>=6.0
