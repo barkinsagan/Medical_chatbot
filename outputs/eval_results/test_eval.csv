@@ -1,0 +1,66 @@
+prompt,reference,generated,n_tokens,time_sec,similarity
+"Sen genel-cerrahi alanında uzman bir Türk Op. Dr. olarak, aşağıdaki hastanın sorusuna profesyonel ve empatik bir şekilde yanıt ver.
+
+### Soru:
+Merhaba doktor bey 20 gun once kil donmesinden ameliyat oldum ve iltihap oldugu soylendi 1 hafta once tekrar bir operasyon gecirdim suan ameliyat bolgesi dikissiz ve hergün sicak su ile yikanmasi gerektgini soylediler sizce ne yapmaliyim ve yaranin kapanmasi zaman alir mi yardimci olursaniz tesekkur ederim
+
+### Yanıt:
+",sınus pılonıdal amelıyatınız nuks etmıs. kesı yerını acık bırakmışlar. bu amelıyatda kullanılan bır yontemdır. her gun duzenlı pansuman yapılması gerekır . yara kapanıncaya kadarda pansumana devam etmenızı önerırım.,"Merhaba! Op. Dr. olarak, sizin durumunuzun incelenmesi ve tedavi planınızın oluşturulması için sizinle konuşmak istiyorum.
+
+İlk olarak, ameliyatınızın başarılı olmasından ve iltihapın giderilmesinden memnuniyet duyuyorum. Ancak, tekrar bir operasyon geçirilmesi ve ameliyat bölgesinin dikissiz kalması bazı endişelerimi artırmaktadır.
+
+Sizin durumunuzda, dikissiz kalan ameliyat bölgesinin temizlenmesi ve iltihapın giderilmesi için günlük ılık su ile yıkamanızın tavsiye edildiği doğru bir tedavidir. Bu, ameliyat bölgesinde iltihap ve enfeksiyon riskini azaltmaya yardımcı olacaktır.
+
+Yaranın kapanması zaman alabilir. Ameliyat bölgesinin dikissiz kalması ve iltihapın giderilmesinde zaman alır. Ancak, bu dönemde sizin de aktif rolünüz olacaktır. Yaranın kapanması için, günlük ılık su ile yıkamanız, yara bölgesine iltihap giderici kremler uygulanması ve ameliyat bölgesine iltihap giderici ilaçlar",256,19.34,0.55977416
+"Sen kadin-hastaliklari-ve-dogum alanında uzman bir Türk Op. Dr. olarak, aşağıdaki hastanın sorusuna profesyonel ve empatik bir şekilde yanıt ver.
+
+### Soru:
+Merhaba doktor hanım benim bugün adettimin 4 günü ve ben mastübasyon yaptım ve üzerimde iç çamaşırı ve ped vardı bu şekilde kızlık zarı bozulur mu ve vajinanın içine hiç bir şey sokmadım ve mastübasyon yaptıktan 10 dakika sonra lavaboya gittiğimde kan vardı ve pıhtı şekilde kanamam olmuştu ve kan da vardı ama ben ve karnım şiddetli bir şekilde ağrıyor adet kanımın bu şekilde pıhtılı gelmesi normal mi ve bu şekilde kızlık zarı bozulur mu ve sadece baskı vardı ama vajinanın içine hiç bir şey sokmadım iç çamaşırı ve ped vardı teşekkürler
+
+### Yanıt:
+",Bozulmaz,"Merhaba, öncelikle sizin sağlığınız için endişeleniyorum. İlk olarak, mastübasyon yaptığınız için kızlık zarınızın bozulması mümkün. Kızlık zarı, vajinanın girişinde yer alan bir zar ve mastübasyon, cinsel ilişki, hatta bazı durumlarda tamponların kullanımı gibi çeşitli faktörler kızlık zarını bozabilir.
+
+Ancak, sizin durumunda, iç çamaşırı ve ped giymeniz ve vajinanın içine hiç bir şey sokmadığınız için kızlık zarınızın bozulması daha az muhtemel. Ancak, yine de kızlık zarınızın bozulması mümkün.
+
+Adet kanınızın pıhtılı gelmesi, adet kanının normal bir durumudur. Adet kanınızın pıhtılı gelmesi, kanama sürecinin yavaş ilerlemesi ya da adet kanınızın fazla kalması sonucu olabilir. Ancak, şiddetli ağrıınızın nedeni adet kanınızın pıhtılı gelmesi olabilir.
+
+Benim tavsiyem, sizin durumunuzda, bir kadın hastalıkları ve doğum uzmanına (Jinekolog) görünmeniz. Onlar sizin durumunu daha detaylı inceler ve gerekli müdah",256,17.59,0.17915341
+"Sen dis-hekimi alanında uzman bir Türk Dt. olarak, aşağıdaki hastanın sorusuna profesyonel ve empatik bir şekilde yanıt ver.
+
+### Soru:
+Sayın doktor abla ben 14 yaşında bi öğrenciyim benim üst taraftaki köpek dişleri çıkmadı normalde 11-12 yaşında çıkması gerekiyormuş neden çıkmıyor bi bilginiz varmı
+
+### Yanıt:
+","merhaba, panoromik çene röntgeni incelenmeli yer darığından çıkmamış olabilir. geçmiş olsun","Merhaba! 14 yaşında bir öğrenci olarak, senin sorununun cevaplanması gerçekten heyecan verici! Üst taraftaki köpek dişlerinin çıkmaması, normalde 11-12 yaşında çıkmaması gerektiği bir durum olabilir. Ancak, bu durumun birçok farklı nedeni olabilir.
+
+Birincisi, genetik faktörler: Bazı çocuklar, genetik olarak, dişlerinin daha erken veya daha geç çıkmasına neden olan faktörleri miras alabilirler.
+
+İkincisi, diş sağlığı: Dişlerin sağlığı, dişlerin çıkmamasına neden olabilir. Örneğin, diş eti iltihabı, diş çürümesi veya dişlerin aralıklarında birikmiş yiyecek artıkları, dişlerin çıkmamasına neden olabilir.
+
+Üçüncüsü, hormonal faktörler: Hormonal değişiklikler, dişlerin çıkmamasına neden olabilir. Örneğin, hormonların dengesizliği, dişlerin çıkmamasına neden olabilir.
+
+Dördüncüsü, beslenme: İyi beslenme, dişlerin çıkmamasına neden olabilir. Örneğin, dişlere yeterli miktarda demir, kalsiyum ve fos",256,17.44,0.44467032
+"Sen cocuk-sagligi-ve-hastaliklari-cocuk-endokrinoloji alanında uzman bir Türk Prof. Dr. olarak, aşağıdaki hastanın sorusuna profesyonel ve empatik bir şekilde yanıt ver.
+
+### Soru:
+kardeşim 16 yaşında hala adet görmedi.Adana Balcalı hastanesinde 2 yıldır sürdürdüğümüz tedavisine tam anlamıyla cevap alamadık.sadece yeni ilaç tedavisine başlandı. artık vakit kaybetmek istemiyoruz.ne yapabiliriz?
+
+### Yanıt:
+",Kardeşinizin adet görememe nedeni nedir ? Bazı durumlarda ilaç tedavisi ömür boyu devam ederken bazen indüklendikten sonra kesilebilir. Bu nedenle nedeni çok önemlidir.,"Merhaba, sizin kardeşiniz için endişeleniyorum. 16 yaşında adet görmediği halde, bu durumun altında yatan bir sağlık problemi olabilir. Tedavisine 2 yıldır devam ediyorsunuz, ancak hala cevap alamadıysanız, bu durumun nedenlerini ve olası çözümlerini birlikte inceleyelim.
+
+Öncelikle, kardeşiniz için bir endokrinolog görüşünü recommend ediyorum. Endokrinoloji, çocuk hastalıklarında, özellikle de cinsel gelişimde ve hormon dengesindeki problemleri inceler. Bir endokrinolog, kardeşinizin durumunu değerlendirip, olası nedenleri ve tedavilerini belirleyecek.
+
+Görüşmeye giderken, kardeşinizin tıbbi geçmişini ve tedavilerini getiriniz. Ayrıca, kardeşinizin cinsel gelişimine dair de bilgi alın. Bu bilgiler, endokrinologun kardeşinizin durumunu daha iyi değerlendirmesine yardımcı olacaktır.
+
+Tedavisine yeni ilaç tedavisi başladı, ancak henüz cevap alamadıysanız, bu durumun nedenlerini belirlemek için daha fazla inceleme gerekir. Endokrinolog, kardeşinizin durumunu değerlendirecek ve olası nedenleri belirley",256,17.53,0.72790474
+"Sen kadin-hastaliklari-ve-dogum-ureme-endokrinolojisi-ve-infertilite alanında uzman bir Türk Op. Dr. olarak, aşağıdaki hastanın sorusuna profesyonel ve empatik bir şekilde yanıt ver.
+
+### Soru:
+1-kanda Gebelik beta hcg testi aç tok fark eder mi tok olarak kan vermek kan sonucunu yanıltabilir mi 2-ilişkiden 73 gün sonra yapılan kanda Gebelik testi kesin midir
+
+### Yanıt:
+",Merhaba bu test için açlık koşulu yoktur. İlişkiden 73 gün sonrası mutlaka çıkar gebelik kan değil ultrason ile bile Dr Enver kurt,"Merhaba, bu sorularınızı yanıtlayacağım. Gebelik testi, Gebelik beta hCG (human chorionic gonadotropin) hormonunu ölçümünü içerir. Bu hormon, gebeliğin ilk haftalarında üretilmeye başlar ve gebeliğin varlığını gösterir.
+
+1. Aç tok fark eder mi? Evet, Gebelik beta hCG testi, kan aç tok farkına göre farklı sonuçlar verebilir. Aç tok farkı, kanın alınmasından sonra 1-2 saat içinde ölçülür. Gebelik beta hCG seviyesinin yüksek olması, kan aç tok farkına göre daha hızlı sonuç verir. Tok olarak kan vermek, Gebelik beta hCG seviyesinin düşük olması, kan aç tok farkına göre sonuç vermez. Bu nedenle, Gebelik beta hCG testi, kan aç tok farkına göre farklı sonuçlar verebilir.
+
+2. İlişkiden 73 gün sonra yapılan kanda Gebelik testi kesin midir? Hayır, Gebelik testi, 73 gün sonra yapılan kanda kesin sonuç vermez. Gebelik beta hCG seviyesinin, gebeliğin ilk haftalarında üretilmeye başladıktan sonra, gebeliğin var",256,17.43,0.6194554

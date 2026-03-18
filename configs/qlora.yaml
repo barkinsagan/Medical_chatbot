@@ -1,0 +1,48 @@
+# Phase 2 — QLoRA fine-tuning
+# Hardware: RTX 4090 (24GB VRAM)
+#
+# Same as lora_baseline.yaml but with 4-bit quantization.
+# This reduces VRAM usage, allowing either larger batch size
+# or longer sequences within the same 24GB budget.
+
+# ── Model ──────────────────────────────────────
+model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+max_seq_length: 512
+
+# ── Quantization (QLoRA-specific) ──────────────
+load_in_4bit: true
+bnb_4bit_compute_dtype: "bfloat16"
+bnb_4bit_quant_type: "nf4"
+bnb_4bit_use_double_quant: true
+
+# ── LoRA ───────────────────────────────────────
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# ── Training ───────────────────────────────────
+# Full 5-epoch run for Phase 2
+learning_rate: 3.0e-5
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8   # effective batch = 32
+num_train_epochs: 5
+warmup_ratio: 0.03
+lr_scheduler_type: "cosine"
+bf16: true
+logging_steps: 50
+save_strategy: "epoch"
+seed: 42
+
+# ── Slerp merge ────────────────────────────────
+slerp_t: 0.5
+
+# ── Output ─────────────────────────────────────
+output_dir: "outputs/checkpoints/qlora"

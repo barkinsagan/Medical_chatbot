@@ -1,0 +1,46 @@
+# configs/lora_baseline.yaml
+# Phase 1 — LoRA fine-tuning (matches paper)
+# Hardware: NVIDIA L4 (24GB VRAM) — tested at 16.94 GB peak with batch 2
+#
+# Paper reference: Bayram et al. (2025)
+# DOI: 10.1145/3772000
+
+# ── Model ──────────────────────────────────────
+model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+max_seq_length: 512
+
+# ── Quantization ───────────────────────────────
+load_in_4bit: false
+
+# ── LoRA ───────────────────────────────────────
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# ── Training ───────────────────────────────────
+# Effective batch = 2 * 16 = 32 (matches paper)
+# Kept batch_size=2 since L4 peaked at ~17GB with this setting
+learning_rate: 3.0e-5
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 16  # 2 * 16 = 32 effective
+num_train_epochs: 1              # validation run — change to 5 for full
+warmup_ratio: 0.03
+lr_scheduler_type: "cosine"
+bf16: true
+logging_steps: 50
+save_strategy: "epoch"
+seed: 42
+
+# ── Slerp merge ────────────────────────────────
+slerp_t: 0.5
+
+# ── Output ─────────────────────────────────────
+output_dir: "outputs/checkpoints/lora_baseline"
