@@ -101,6 +101,7 @@ def load_model(config: dict = None):
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.model_max_length = cfg["max_seq_length"]
 
     # Quantization config for QLoRA
     bnb_config = None
@@ -168,7 +169,6 @@ def train(model, tokenizer, train_dataset, config: dict = None):
         logging_steps=cfg["logging_steps"],
         save_strategy=cfg["save_strategy"],
         seed=cfg["seed"],
-        max_seq_length=cfg["max_seq_length"],
         dataset_text_field="text",
     )
 
