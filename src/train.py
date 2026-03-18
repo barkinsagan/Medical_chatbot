@@ -169,6 +169,7 @@ def train(model, tokenizer, train_dataset, config: dict = None):
         logging_steps=cfg["logging_steps"],
         save_strategy=cfg["save_strategy"],
         seed=cfg["seed"],
+        gradient_checkpointing=True,
         dataset_text_field="text",
     )
 
