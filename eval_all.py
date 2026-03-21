@@ -119,6 +119,8 @@ def main():
                         help="Test samples per model (default: all 37,527)")
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--batch_size", type=int, default=8,
+                        help="Samples per batch (increase if VRAM allows, e.g. 16)")
     args = parser.parse_args()
 
     print(f"Scanning {args.checkpoints_dir} for adapters...")
@@ -158,6 +160,7 @@ def main():
             n_samples=args.n_samples,
             label=label,
             save_path=save_path,
+            batch_size=args.batch_size,
         )
         total_time = time.time() - t0
 

@@ -32,9 +32,10 @@ def generate_responses(
     n_samples: int = None,
     max_new_tokens: int = 256,
     temperature: float = 0.7,
+    batch_size: int = 8,
 ) -> pd.DataFrame:
     """
-    Generates model responses for the test set prompts.
+    Generates model responses for the test set prompts in batches.
 
     Each test row has a 'prompt' (the question formatted for inference)
     and a 'reference' (the real doctor's answer). This function feeds
@@ -47,27 +48,35 @@ def generate_responses(
         n_samples      : how many test samples to evaluate (None = all)
         max_new_tokens : max tokens to generate per response
         temperature    : sampling temperature (0.7 matches typical medical LLM evals)
+        batch_size     : number of samples to generate in parallel (tune to VRAM)
 
     Returns:
         DataFrame with columns: prompt, reference, generated, n_tokens, time_sec
     """
     model.eval()
+    tokenizer.padding_side = "left"  # required for batch generation
 
-    # Subset if requested
     if n_samples is not None:
         test_dataset = test_dataset.select(range(min(n_samples, len(test_dataset))))
 
     results = []
-    for i in tqdm(range(len(test_dataset)), desc="Generating"):
-        row = test_dataset[i]
-        prompt = row["prompt"]
-        reference = row["reference"]
+    total = len(test_dataset)
 
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    for start in tqdm(range(0, total, batch_size), desc="Generating"):
+        batch = test_dataset.select(range(start, min(start + batch_size, total)))
+        prompts    = batch["prompt"]
+        references = batch["reference"]
+
+        inputs = tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to(model.device)
 
         t0 = time.time()
         with torch.no_grad():
-            output = model.generate(
+            outputs = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
@@ -75,18 +84,19 @@ def generate_responses(
                 pad_token_id=tokenizer.pad_token_id,
             )
         elapsed = time.time() - t0
+        time_per_sample = elapsed / len(prompts)
 
-        # Decode only the newly generated tokens (not the prompt)
-        gen_ids = output[0][inputs["input_ids"].shape[1]:]
-        generated = tokenizer.decode(gen_ids, skip_special_tokens=True)
-
-        results.append({
-            "prompt": prompt,
-            "reference": reference,
-            "generated": generated,
-            "n_tokens": len(gen_ids),
-            "time_sec": round(elapsed, 2),
-        })
+        prompt_len = inputs["input_ids"].shape[1]
+        for i, (prompt, reference) in enumerate(zip(prompts, references)):
+            gen_ids   = outputs[i][prompt_len:]
+            generated = tokenizer.decode(gen_ids, skip_special_tokens=True)
+            results.append({
+                "prompt":    prompt,
+                "reference": reference,
+                "generated": generated,
+                "n_tokens":  len(gen_ids),
+                "time_sec":  round(time_per_sample, 2),
+            })
 
     return pd.DataFrame(results)
 
@@ -192,6 +202,7 @@ def evaluate(
     n_samples: int = None,
     label: str = "Model",
     save_path: str = None,
+    batch_size: int = 8,
 ) -> pd.DataFrame:
     """
     Runs the full evaluation pipeline: generate → similarity → summary.
@@ -209,7 +220,7 @@ def evaluate(
     """
     # Step 1: Generate responses
     print(f"\n--- Generating responses ({n_samples or len(test_dataset)} samples) ---")
-    df = generate_responses(model, tokenizer, test_dataset, n_samples=n_samples)
+    df = generate_responses(model, tokenizer, test_dataset, n_samples=n_samples, batch_size=batch_size)
 
     # Step 2: Compute SBERT similarity
     print(f"\n--- Computing SBERT cosine similarity ---")
