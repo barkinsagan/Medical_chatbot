@@ -170,6 +170,8 @@ def train(model, tokenizer, train_dataset, config: dict = None):
         save_strategy=cfg["save_strategy"],
         seed=cfg["seed"],
         gradient_checkpointing=True,
+        dataloader_num_workers=4,
+        dataloader_pin_memory=True,
         dataset_text_field="text",
     )
 

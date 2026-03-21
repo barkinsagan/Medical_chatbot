@@ -1,0 +1,23 @@
+# Model outputs & checkpoints
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# HuggingFace caches
+huggingface_tokenizers_cache/
+unsloth_compiled_cache/
+*.safetensors
+*.bin
+*.pt
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+.env
+*.log
