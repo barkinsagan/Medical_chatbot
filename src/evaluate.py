@@ -64,8 +64,8 @@ def generate_responses(
 
     for start in tqdm(range(0, total, batch_size), desc="Generating"):
         batch = test_dataset.select(range(start, min(start + batch_size, total)))
-        prompts    = batch["prompt"]
-        references = batch["reference"]
+        prompts    = list(batch["prompt"])
+        references = list(batch["reference"])
 
         inputs = tokenizer(
             prompts,
