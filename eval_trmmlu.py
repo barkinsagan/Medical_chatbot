@@ -25,7 +25,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
 # Answer choices — we score log-prob of these single tokens
-CHOICES = ["A", "B", "C", "D"]
+CHOICES = ["A", "B", "C", "D", "E"]
 
 # Paper baselines for the comparison table
 PAPER_BASELINES = {
@@ -40,6 +40,7 @@ A) {option_a}
 B) {option_b}
 C) {option_c}
 D) {option_d}
+E) {option_e}
 
 Cevap:"""
 
@@ -65,7 +66,7 @@ def load_trmmlu(n_samples: int = None):
 
 
 def format_prompt(example: dict) -> str:
-    # secenekler is a list of 4 option strings
+    # secenekler is a list of 5 option strings
     opts = example["secenekler"]
     return MCQ_TEMPLATE.format(
         question=example["soru"],
@@ -73,6 +74,7 @@ def format_prompt(example: dict) -> str:
         option_b=opts[1],
         option_c=opts[2],
         option_d=opts[3],
+        option_e=opts[4],
     )
 
 
