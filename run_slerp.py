@@ -78,7 +78,7 @@ class BaseWeightReader:
 
     def __init__(self, model_name: str):
         print(f"  Locating base model in HF cache: {model_name}")
-        cache_dir = snapshot_download(model_name)
+        cache_dir = snapshot_download(model_name, local_files_only=True)
 
         index_path = os.path.join(cache_dir, "model.safetensors.index.json")
         if os.path.exists(index_path):
