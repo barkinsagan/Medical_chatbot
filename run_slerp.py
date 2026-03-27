@@ -8,6 +8,9 @@ t=0.0 → pure base model, t=1.0 → pure fine-tuned model, t=0.5 → 50/50 blen
 Paper baseline (Bayram et al., 2025, DOI: 10.1145/3772000):
   t=0.5 → TR-MMLU score: 53/100  (vs 19/100 fine-tuned only)
 
+Memory-efficient design: base weights are read from the HF cache via memory-mapped
+safetensors — only the tuned model (~16GB) is held in RAM at once.
+
 Usage:
     python run_slerp.py --adapter outputs/checkpoints/lora_baseline --t 0.3 0.5 0.7
     python run_slerp.py --adapter outputs/checkpoints/qlora --t 0.5
@@ -15,9 +18,12 @@ Usage:
 """
 
 import argparse
+import gc
 import json
 import os
 import torch
+from safetensors import safe_open
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
@@ -51,7 +57,6 @@ def slerp_tensor(w0: torch.Tensor, w1: torch.Tensor, t: float) -> torch.Tensor:
     sin_omega = torch.sin(omega)
 
     if sin_omega.abs() < 1e-6:
-        # Nearly parallel — fall back to lerp
         return ((1 - t) * w0 + t * w1).to(orig_dtype)
 
     result = (
@@ -61,50 +66,58 @@ def slerp_tensor(w0: torch.Tensor, w1: torch.Tensor, t: float) -> torch.Tensor:
     return result.reshape(w0.shape).to(orig_dtype)
 
 
-def slerp_state_dicts(base_sd: dict, tuned_sd: dict, t: float) -> dict:
-    """
-    Applies slerp_tensor to every matching float parameter.
-    Non-float buffers (e.g. position ids, layer norm counters) are taken from base.
-    """
-    merged = {}
-    for key in base_sd:
-        if key not in tuned_sd:
-            merged[key] = base_sd[key]
-            continue
+# ──────────────────────────────────────────────
+# Memory-mapped base weight reader
+# ──────────────────────────────────────────────
 
-        w0 = base_sd[key]
-        w1 = tuned_sd[key]
+class BaseWeightReader:
+    """
+    Reads base model weights on demand from memory-mapped safetensors files
+    in the HuggingFace cache. Uses near-zero RAM — tensors are loaded one at a time.
+    """
 
-        if w0.dtype in (torch.float32, torch.float16, torch.bfloat16) and w0.shape == w1.shape:
-            merged[key] = slerp_tensor(w0, w1, t)
+    def __init__(self, model_name: str):
+        print(f"  Locating base model in HF cache: {model_name}")
+        cache_dir = snapshot_download(model_name)
+
+        index_path = os.path.join(cache_dir, "model.safetensors.index.json")
+        if os.path.exists(index_path):
+            with open(index_path) as f:
+                self._weight_map = json.load(f)["weight_map"]
+            self._handles = {
+                fname: safe_open(os.path.join(cache_dir, fname), framework="pt", device="cpu")
+                for fname in set(self._weight_map.values())
+            }
+            self._sharded = True
         else:
-            merged[key] = w0  # keep base for non-float or mismatched tensors
+            self._handle = safe_open(
+                os.path.join(cache_dir, "model.safetensors"), framework="pt", device="cpu"
+            )
+            self._sharded = False
 
-    return merged
-
-
-# ──────────────────────────────────────────────
-# Model loading
-# ──────────────────────────────────────────────
-
-def load_base(model_name: str):
-    print(f"  Loading base model: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-    )
-    return model, tokenizer
+    def get(self, name: str) -> torch.Tensor | None:
+        if self._sharded:
+            if name not in self._weight_map:
+                return None
+            return self._handles[self._weight_map[name]].get_tensor(name)
+        else:
+            if name not in self._handle.keys():
+                return None
+            return self._handle.get_tensor(name)
 
 
 # ──────────────────────────────────────────────
 # Main merge pipeline
 # ──────────────────────────────────────────────
 
-def merge_one(adapter_path: str, base_model_name: str, t: float, out_dir: str):
+def merge_one(
+    adapter_path: str,
+    base_model_name: str,
+    t: float,
+    out_dir: str,
+    base_reader: BaseWeightReader,
+    tokenizer: AutoTokenizer,
+):
     adapter_name = os.path.basename(adapter_path.rstrip("/"))
     output_path  = os.path.join(out_dir, f"{adapter_name}_t{t:.2f}")
 
@@ -113,32 +126,35 @@ def merge_one(adapter_path: str, base_model_name: str, t: float, out_dir: str):
     print(f"Output:      {output_path}")
     print(f"{'='*60}")
 
-    # 1. Load base model (CPU to allow weight surgery)
-    base_model, tokenizer = load_base(base_model_name)
-    base_sd = {k: v.clone() for k, v in base_model.state_dict().items()}
-
-    # 2. Load adapter on top and merge LoRA weights into a plain model
+    # 1. Load base model + adapter, merge LoRA weights in-place
     print(f"  Loading adapter + merging LoRA weights...")
-    tuned_model = PeftModel.from_pretrained(base_model, adapter_path)
-    tuned_model = tuned_model.merge_and_unload()  # returns plain HF model
-    tuned_sd = tuned_model.state_dict()
+    base = AutoModelForCausalLM.from_pretrained(
+        base_model_name,
+        torch_dtype=torch.bfloat16,
+    )
+    tuned = PeftModel.from_pretrained(base, adapter_path).merge_and_unload()
 
-    # 3. Apply Slerp between base and merged weights
+    # 2. Apply Slerp in-place — read base weights one tensor at a time from cache
     print(f"  Applying Slerp (t={t})...")
-    merged_sd = slerp_state_dicts(base_sd, tuned_sd, t)
+    float_dtypes = (torch.float32, torch.float16, torch.bfloat16)
+    with torch.no_grad():
+        for name, param in tuned.named_parameters():
+            base_w = base_reader.get(name)
+            if base_w is not None and param.dtype in float_dtypes:
+                param.data.copy_(
+                    slerp_tensor(base_w.to(param.dtype), param.data, t)
+                )
 
-    # 4. Load merged weights back into the model
-    tuned_model.load_state_dict(merged_sd)
-
-    # 5. Save as a standard HF model (config.json + safetensors)
+    # 3. Save as standard HF model (config.json + safetensors)
     print(f"  Saving to {output_path}...")
     os.makedirs(output_path, exist_ok=True)
-    tuned_model.save_pretrained(output_path)
+    tuned.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
 
     print(f"  Done: {output_path}")
 
-    del base_model, tuned_model, base_sd, tuned_sd, merged_sd
+    del tuned, base
+    gc.collect()
     torch.cuda.empty_cache()
 
     return output_path
@@ -161,25 +177,34 @@ def main():
     args = parser.parse_args()
 
     # Resolve base model from adapter config if not provided
-    base_model = args.base_model
-    if base_model is None:
+    base_model_name = args.base_model
+    if base_model_name is None:
         config_path = os.path.join(args.adapter, "adapter_config.json")
         if not os.path.isfile(config_path):
             raise FileNotFoundError(f"No adapter_config.json found at {args.adapter}")
         with open(config_path) as f:
             cfg = json.load(f)
-        base_model = cfg.get("base_model_name_or_path", "meta-llama/Meta-Llama-3-8B-Instruct")
-        base_model = base_model.replace("unsloth/llama-3-8b-Instruct", "meta-llama/Meta-Llama-3-8B-Instruct")
-        print(f"Base model (from adapter config): {base_model}")
+        base_model_name = cfg.get("base_model_name_or_path", "meta-llama/Meta-Llama-3-8B-Instruct")
+        base_model_name = base_model_name.replace(
+            "unsloth/llama-3-8b-Instruct", "meta-llama/Meta-Llama-3-8B-Instruct"
+        )
+        print(f"Base model (from adapter config): {base_model_name}")
 
     os.makedirs(args.out_dir, exist_ok=True)
+
+    # Load tokenizer and base weight reader once — reused across all t values
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    base_reader = BaseWeightReader(base_model_name)
 
     saved = []
     for t in args.t:
         if not 0.0 <= t <= 1.0:
             print(f"  Skipping t={t} — must be between 0.0 and 1.0")
             continue
-        path = merge_one(args.adapter, base_model, t, args.out_dir)
+        path = merge_one(args.adapter, base_model_name, t, args.out_dir, base_reader, tokenizer)
         saved.append((t, path))
 
     print(f"\n{'='*60}")
