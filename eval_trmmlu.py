@@ -51,8 +51,8 @@ Cevap:"""
 def load_trmmlu(n_samples: int = None):
     """
     Loads alibayram/turkish_mmlu.
-    The dataset has a single 'test' split with columns:
-      question, option_a, option_b, option_c, option_d, answer (one of A/B/C/D), category
+    Actual columns: bolum (section), konu (topic), soru (question),
+                    cevap (answer), aciklama (explanation), secenekler (options list)
     """
     print("Loading alibayram/turkish_mmlu...")
     ds = load_dataset("alibayram/turkish_mmlu", split="test")
@@ -60,17 +60,19 @@ def load_trmmlu(n_samples: int = None):
     if n_samples is not None:
         ds = ds.select(range(min(n_samples, len(ds))))
 
-    print(f"  {len(ds):,} questions, {ds.unique('category').__len__()} sections")
+    print(f"  {len(ds):,} questions, {len(ds.unique('bolum'))} sections")
     return ds
 
 
 def format_prompt(example: dict) -> str:
+    # secenekler is a list of 4 option strings
+    opts = example["secenekler"]
     return MCQ_TEMPLATE.format(
-        question=example["question"],
-        option_a=example["option_a"],
-        option_b=example["option_b"],
-        option_c=example["option_c"],
-        option_d=example["option_d"],
+        question=example["soru"],
+        option_a=opts[0],
+        option_b=opts[1],
+        option_c=opts[2],
+        option_d=opts[3],
     )
 
 
@@ -139,15 +141,15 @@ def evaluate_model(model, tokenizer, dataset, label: str) -> pd.DataFrame:
         prompt    = format_prompt(example)
         pred_idx  = score_example(model, tokenizer, prompt, answer_token_ids)
         pred_char = CHOICES[pred_idx]
-        true_char = example["answer"].strip().upper()
+        true_char = example["cevap"].strip().upper()
 
         is_correct = pred_char == true_char
         if is_correct:
             correct += 1
 
         rows.append({
-            "category":  example["category"],
-            "question":  example["question"][:120],
+            "category":  example["bolum"],
+            "question":  example["soru"][:120],
             "true":      true_char,
             "predicted": pred_char,
             "correct":   is_correct,
