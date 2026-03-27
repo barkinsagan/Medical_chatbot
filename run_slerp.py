@@ -96,7 +96,6 @@ def load_base(model_name: str):
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
-        device_map="cpu",  # keep on CPU for weight manipulation
     )
     return model, tokenizer
 
