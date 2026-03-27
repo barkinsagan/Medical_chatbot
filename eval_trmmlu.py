@@ -175,12 +175,32 @@ def section_breakdown(df: pd.DataFrame) -> pd.DataFrame:
     return grp.sort_values("accuracy", ascending=False).reset_index()
 
 
-def print_section_breakdown(sec: pd.DataFrame):
-    print(f"\n{'Section':<45} {'Correct':>8} {'Total':>7} {'Accuracy':>10}")
-    print("-" * 73)
-    for _, row in sec.iterrows():
-        print(f"{row['category']:<45} {int(row['correct']):>8} {int(row['total']):>7} {row['accuracy']:>9.1f}%")
-    print("-" * 73)
+def print_combined_sections(all_dfs: dict[str, pd.DataFrame]):
+    """Prints one table with all models' per-section accuracy side by side."""
+    # Build a section -> model -> accuracy mapping
+    sections = sorted(set(s for df in all_dfs.values() for s in df["category"].unique()))
+    labels = list(all_dfs.keys())
+
+    col_w = 12
+    header = f"{'Section':<45}" + "".join(f"{l[:col_w]:>{col_w}}" for l in labels)
+    print("\n" + "=" * len(header))
+    print("PER-SECTION ACCURACY (%)")
+    print("=" * len(header))
+    print(header)
+    print("-" * len(header))
+
+    for section in sections:
+        row_str = f"{section:<45}"
+        for label, df in all_dfs.items():
+            mask = df["category"] == section
+            if mask.any():
+                acc = df[mask]["correct"].mean() * 100
+                row_str += f"{acc:>{col_w}.1f}"
+            else:
+                row_str += f"{'—':>{col_w}}"
+        print(row_str)
+
+    print("=" * len(header))
 
 
 # ──────────────────────────────────────────────
@@ -302,6 +322,7 @@ def main():
     dataset = load_trmmlu(n_samples=args.n_samples)
 
     summary_rows = []
+    all_dfs = {}  # label -> df, collected for combined section table at the end
 
     # ── 1. Base model ────────────────────────────
     if not args.skip_base:
@@ -310,7 +331,7 @@ def main():
         print(f"{'='*60}")
         model, tokenizer = load_base_model(args.base_model)
         df = evaluate_model(model, tokenizer, dataset, label="base_model")
-        print_section_breakdown(section_breakdown(df))
+        all_dfs["base_model"] = df
 
         summary_rows.append({
             "label":   "base_model",
@@ -341,7 +362,7 @@ def main():
 
         model, tokenizer = load_adapter_model(base_model, adapter_path)
         df = evaluate_model(model, tokenizer, dataset, label=label)
-        print_section_breakdown(section_breakdown(df))
+        all_dfs[label] = df
 
         summary_rows.append({
             "label":   label,
@@ -356,12 +377,10 @@ def main():
     # ── 3. Slerp-merged models (optional) ────────
     slerp_models = []
 
-    # Explicit paths: --slerp_paths path1 path2 ...
     if args.slerp_paths:
         for path in args.slerp_paths:
             slerp_models.append({"label": os.path.basename(path.rstrip("/")) or "slerp_merged", "path": path})
 
-    # Auto-discovery: --slerp_dir outputs/checkpoints/slerp/
     if args.slerp_dir:
         print(f"\nScanning {args.slerp_dir} for Slerp models...")
         slerp_models.extend(discover_slerp_models(args.slerp_dir))
@@ -373,7 +392,7 @@ def main():
 
         model, tokenizer = load_base_model(slerp["path"])
         df = evaluate_model(model, tokenizer, dataset, label=slerp["label"])
-        print_section_breakdown(section_breakdown(df))
+        all_dfs[slerp["label"]] = df
 
         summary_rows.append({
             "label":   slerp["label"],
@@ -388,6 +407,7 @@ def main():
     # ── 4. Summary ───────────────────────────────
     if summary_rows:
         print_comparison(summary_rows)
+        print_combined_sections(all_dfs)
 
 
 if __name__ == "__main__":
