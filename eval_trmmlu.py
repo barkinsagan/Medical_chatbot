@@ -141,7 +141,7 @@ def evaluate_model(model, tokenizer, dataset, label: str) -> pd.DataFrame:
         prompt    = format_prompt(example)
         pred_idx  = score_example(model, tokenizer, prompt, answer_token_ids)
         pred_char = CHOICES[pred_idx]
-        true_char = example["cevap"].strip().upper()
+        true_char = CHOICES[example["cevap"]]
 
         is_correct = pred_char == true_char
         if is_correct:
