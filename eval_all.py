@@ -28,6 +28,21 @@ RESULTS_DIR = "outputs/eval_results"
 # Discover adapters
 # ──────────────────────────────────────────────
 
+def discover_slerp_models(slerp_dir: str) -> list[dict]:
+    """Finds standalone merged models (config.json but no adapter_config.json)."""
+    models = []
+    if not os.path.isdir(slerp_dir):
+        return models
+    for entry in sorted(os.scandir(slerp_dir), key=lambda e: e.name):
+        if not entry.is_dir():
+            continue
+        if os.path.isfile(os.path.join(entry.path, "config.json")) and \
+           not os.path.isfile(os.path.join(entry.path, "adapter_config.json")):
+            models.append({"label": entry.name, "model_path": entry.path})
+            print(f"  Found slerp model: {entry.name}")
+    return models
+
+
 def discover_adapters(checkpoints_dir: str) -> list[dict]:
     """
     Walks checkpoints_dir and returns a list of adapter dicts for every
@@ -115,6 +130,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoints_dir", default="outputs/checkpoints",
                         help="Directory to scan for adapter folders")
+    parser.add_argument("--slerp_dir", default=None,
+                        help="Directory to scan for Slerp-merged standalone models")
     parser.add_argument("--n_samples", type=int, default=None,
                         help="Test samples per model (default: all 37,527)")
     parser.add_argument("--max_new_tokens", type=int, default=256)
@@ -176,6 +193,48 @@ def main():
 
         del model, base
         torch.cuda.empty_cache()
+
+    # ── Slerp merged models ──────────────────────
+    if args.slerp_dir:
+        print(f"\nScanning {args.slerp_dir} for Slerp models...")
+        slerp_models = discover_slerp_models(args.slerp_dir)
+
+        for entry in slerp_models:
+            label      = entry["label"]
+            model_path = entry["model_path"]
+
+            print(f"\n{'='*60}")
+            print(f"Evaluating : {label}")
+            print(f"Model      : {model_path}")
+            print(f"{'='*60}")
+
+            model, tokenizer = load_base(model_path)
+            model.eval()
+
+            t0 = time.time()
+            save_path = os.path.join(RESULTS_DIR, f"{label}.csv")
+
+            df = evaluate(
+                model, tokenizer, test_dataset,
+                n_samples=args.n_samples,
+                label=label,
+                save_path=save_path,
+                batch_size=args.batch_size,
+            )
+            total_time = time.time() - t0
+
+            summary_rows.append({
+                "label":      label,
+                "n_samples":  len(df),
+                "avg_sim":    df["similarity"].mean(),
+                "med_sim":    df["similarity"].median(),
+                "std_sim":    df["similarity"].std(),
+                "avg_tokens": df["n_tokens"].mean(),
+                "total_time": total_time,
+            })
+
+            del model
+            torch.cuda.empty_cache()
 
     if summary_rows:
         print_comparison(summary_rows)
