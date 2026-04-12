@@ -48,8 +48,8 @@ def parse_args():
                         help="HuggingFace base model ID")
     parser.add_argument("--index_dir",    default="outputs/rag_index",
                         help="Path to directory with index.faiss and chunks.parquet")
-    parser.add_argument("--n_samples",    type=int, default=100,
-                        help="Number of test samples to evaluate (default 100)")
+    parser.add_argument("--n_samples",    type=int, default=None,
+                        help="Number of test samples to evaluate (default: all)")
     parser.add_argument("--k",            type=int, default=3,
                         help="Number of chunks to retrieve per query")
     parser.add_argument("--max_new_tokens", type=int, default=512)
