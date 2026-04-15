@@ -1,31 +1,31 @@
 """
-scripts/eval_gemini.py — Gemini-scored comparison of QLoRA vs RAG + paired t-test
+scripts/eval_gemini.py — LLM-scored comparison of QLoRA vs RAG + paired t-test
 
 For each sample:
   1. Generates a QLoRA answer (no retrieval)
   2. Generates a RAG answer (with retrieved context)
-  3. Asks Gemini Flash to score both answers 1-10 on medical quality
-  4. Runs a paired t-test to determine if the difference is statistically significant
-
-Free tier: 15 req/min, 1500 req/day on Gemini Flash.
-With 2 scoring calls per sample, 200 samples = 400 Gemini calls — well within daily limit.
-Rate limiter built in to stay under 15 req/min.
+  3. Scores both answers on 3 dimensions (accuracy, completeness, practicality)
+     using either Gemini Flash (API) or the already-loaded local LLaMA 3 (--local_scoring)
+  4. Runs a paired t-test per dimension
 
 Usage:
-    # QLoRA adapter (base + adapter)
-    python scripts/eval_gemini.py --n_samples 200
+    # Local scoring — no API key needed, uses the 4090
+    python scripts/eval_gemini.py --local_scoring --n_samples 200
 
-    # SLERP merged model (pass --merged, point adapter_dir at the merged model)
+    # Gemini scoring (requires GEMINI_API_KEY)
+    python scripts/eval_gemini.py --n_samples 150
+
+    # SLERP merged model + local scoring
     python scripts/eval_gemini.py \
         --adapter_dir  outputs/merged/qlora_t0.50 \
         --merged \
+        --local_scoring \
         --n_samples    200 \
-        --k            5 \
-        --save_path    outputs/eval_results/gemini_slerp_rag.csv
+        --save_path    outputs/eval_results/slerp_rag_scored.csv
 
 Requires:
-    conda env config vars set GEMINI_API_KEY=your_key
     conda env config vars set HF_TOKEN=your_token
+    conda env config vars set GEMINI_API_KEY=your_key  # only if not using --local_scoring
 """
 
 import argparse
@@ -74,6 +74,8 @@ def parse_args():
                         help="Generation batch size")
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--save_path",      default="outputs/eval_results/gemini_comparison.csv")
+    parser.add_argument("--local_scoring",  action="store_true",
+                        help="Use the locally loaded LLaMA 3 for scoring instead of Gemini API")
     return parser.parse_args()
 
 
@@ -246,6 +248,40 @@ def score_with_gemini(
     return scores
 
 
+def score_with_local_model(
+    model,
+    tokenizer,
+    question: str,
+    answer: str,
+) -> dict | None:
+    """
+    Scores a medical answer on three dimensions using the locally loaded model.
+    Uses greedy decoding with max_new_tokens=5 to get a clean integer response.
+    Same dimension prompts as Gemini scoring for comparability.
+    """
+    scores = {}
+    for dim_name, prompt_template in DIMENSIONS:
+        prompt = prompt_template.format(question=question, answer=answer)
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=5,
+                do_sample=False,          # greedy — we want a deterministic number
+                pad_token_id=tokenizer.pad_token_id,
+            )
+        gen_ids = output_ids[0][inputs["input_ids"].shape[1]:]
+        text    = tokenizer.decode(gen_ids, skip_special_tokens=True)
+        score   = _parse_score(text)
+        if score is None:
+            print(f"    [local scorer] invalid response for {dim_name}: {text!r}")
+            return None
+        scores[dim_name] = score
+
+    scores["overall"] = round(np.mean(list(scores.values())), 4)
+    return scores
+
+
 # ──────────────────────────────────────────────
 # Statistical test
 # ──────────────────────────────────────────────
@@ -287,7 +323,7 @@ def run_all_ttests(rows: list[dict]) -> list[dict]:
 
 def print_stats(ttest_results: list[dict]):
     print(f"\n{'='*70}")
-    print("STATISTICAL COMPARISON — QLoRA vs RAG (Gemini scoring, paired t-test)")
+    print("STATISTICAL COMPARISON — QLoRA vs RAG (LLM scoring, paired t-test)")
     print(f"{'='*70}")
     print(f"  {'Dimension':<14} {'QLoRA':>6} {'RAG':>6} {'Diff':>7} {'95% CI':>18} {'p':>7}  Result")
     print(f"  {'-'*65}")
@@ -315,18 +351,25 @@ def print_stats(ttest_results: list[dict]):
 def main():
     args = parse_args()
 
-    # ── Check API key ─────────────────────────
-    gemini_key = os.environ.get("GEMINI_API_KEY")
-    if not gemini_key:
-        raise EnvironmentError(
-            "GEMINI_API_KEY not set. Run: conda env config vars set GEMINI_API_KEY=your_key"
-        )
-    genai.configure(api_key=gemini_key)
-    gemini_model = genai.GenerativeModel(GEMINI_MODEL)
+    # ── Scorer setup ──────────────────────────
+    gemini_model = None
+    if args.local_scoring:
+        scorer_label = "Local LLaMA 3 (greedy)"
+    else:
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if not gemini_key:
+            raise EnvironmentError(
+                "GEMINI_API_KEY not set. Use --local_scoring or: "
+                "conda env config vars set GEMINI_API_KEY=your_key"
+            )
+        genai.configure(api_key=gemini_key)
+        gemini_model = genai.GenerativeModel(GEMINI_MODEL)
+        scorer_label = f"Gemini {GEMINI_MODEL}"
 
     print("=" * 60)
-    print("GEMINI COMPARISON — QLoRA vs RAG")
+    print("LLM COMPARISON — QLoRA vs RAG")
     print("=" * 60)
+    print(f"  Scorer     : {scorer_label}")
     print(f"  Samples    : {args.n_samples}")
     print(f"  k          : {args.k}")
     print(f"  Batch size : {args.batch_size}")
@@ -384,24 +427,22 @@ def main():
         all_questions.extend(questions)
         all_references.extend(references)
 
-    # ── Gemini scoring ────────────────────────
-    # 3 dimension calls per answer × 2 answers per sample
-    calls_per_sample = len(DIMENSIONS) * 2
-    est_min = total * calls_per_sample * RATE_LIMIT_DELAY / 60
-    print(f"\nScoring with Gemini ({GEMINI_MODEL})")
-    print(f"  {calls_per_sample} calls/sample × {total} samples = {total * calls_per_sample} calls")
-    print(f"  Estimated time: ~{est_min:.0f} min at {RATE_LIMIT_DELAY}s between calls")
-
+    # ── Scoring ───────────────────────────────
+    print(f"\nScoring with {scorer_label}...")
     rows = []
 
-    for i in tqdm(range(total), desc="Gemini scoring"):
+    for i in tqdm(range(total), desc="Scoring"):
         q       = all_questions[i]
         qlora_a = all_qlora[i]
         rag_a   = all_rag[i]
         ref     = all_references[i]
 
-        scores_qlora = score_with_gemini(gemini_model, q, qlora_a)
-        scores_rag   = score_with_gemini(gemini_model, q, rag_a)
+        if args.local_scoring:
+            scores_qlora = score_with_local_model(model, tokenizer, q, qlora_a)
+            scores_rag   = score_with_local_model(model, tokenizer, q, rag_a)
+        else:
+            scores_qlora = score_with_gemini(gemini_model, q, qlora_a)
+            scores_rag   = score_with_gemini(gemini_model, q, rag_a)
 
         if scores_qlora is None or scores_rag is None:
             print(f"  Skipping sample {i+1} — Gemini returned invalid score")
