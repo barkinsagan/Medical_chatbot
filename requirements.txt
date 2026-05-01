@@ -25,6 +25,7 @@ huggingface_hub>=0.25.0
 
 # Evaluation
 sentence-transformers>=3.0.0
+sacrebleu>=2.4.0
 
 # Utilities
 # Install torch manually before running pip install -r requirements.txt:
