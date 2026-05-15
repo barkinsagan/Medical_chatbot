@@ -63,6 +63,8 @@ def parse_args():
                         help="Path to training config YAML (e.g. configs/qlora.yaml)")
     parser.add_argument("--adapter_path", default=None,
                         help="Override adapter path (default: config's output_dir)")
+    parser.add_argument("--base_only",     action="store_true",
+                        help="Evaluate the raw base model from config (no adapter, no slerp)")
     parser.add_argument("--slerp_path",   default=None,
                         help="Path to a Slerp-merged standalone model (skips adapter loading)")
     parser.add_argument("--n_samples",    type=int, default=None,
@@ -262,8 +264,11 @@ def main():
     cfg = load_config(args.config)
 
     # Determine label and model source
-    if args.slerp_path:
-        label       = os.path.basename(args.slerp_path.rstrip("/"))
+    if args.base_only:
+        label        = os.path.basename(cfg["model_name"].rstrip("/")) + "_base"
+        model_source = f"base: {cfg['model_name']}"
+    elif args.slerp_path:
+        label        = os.path.basename(args.slerp_path.rstrip("/"))
         model_source = f"slerp: {args.slerp_path}"
     else:
         adapter_path = args.adapter_path or cfg["output_dir"]
@@ -286,7 +291,9 @@ def main():
 
     # ── Load model ────────────────────────────
     print("Loading model...")
-    if args.slerp_path:
+    if args.base_only:
+        model, tokenizer = load_standalone(cfg["model_name"])
+    elif args.slerp_path:
         model, tokenizer = load_standalone(args.slerp_path)
     else:
         model, tokenizer = load_adapter(cfg, adapter_path)
