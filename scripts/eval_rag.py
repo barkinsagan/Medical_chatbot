@@ -3,8 +3,8 @@ scripts/eval_rag.py — RAG evaluation pipeline (Phase 3)
 
 Loads the QLoRA adapter via HuggingFace transformers + PEFT (no Unsloth),
 retrieves context from the FAISS index, generates RAG answers on the test
-set, and computes cosine similarity against reference answers (same metric
-as Phase 1/2).
+set, and computes BLEU, token-F1, and SBERT cosine similarity against
+reference answers.
 
 Batched design: retrieval and generation are both batched so the 4090
 stays saturated throughout the run.
@@ -26,8 +26,10 @@ Requires:
 import argparse
 import os
 import sys
+from collections import Counter
 
 import numpy as np
+import sacrebleu
 import torch
 import pandas as pd
 from tqdm import tqdm
@@ -137,15 +139,47 @@ def batch_retrieve(
 
 
 # ──────────────────────────────────────────────
-# Similarity scoring
+# Metrics
 # ──────────────────────────────────────────────
+
+def compute_token_f1(generated: str, reference: str) -> float:
+    gen_tokens = generated.lower().split()
+    ref_tokens = reference.lower().split()
+    if not gen_tokens or not ref_tokens:
+        return 0.0
+    gen_counts = Counter(gen_tokens)
+    ref_counts = Counter(ref_tokens)
+    common = sum((gen_counts & ref_counts).values())
+    if common == 0:
+        return 0.0
+    precision = common / len(gen_tokens)
+    recall    = common / len(ref_tokens)
+    return 2 * precision * recall / (precision + recall)
+
+
+def compute_bleu(df: pd.DataFrame) -> float:
+    result = sacrebleu.corpus_bleu(
+        df["generated"].tolist(),
+        [df["reference"].tolist()],
+        tokenize="intl",
+    )
+    return result.score
+
+
+def compute_f1_column(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["f1"] = [
+        compute_token_f1(gen, ref)
+        for gen, ref in zip(df["generated"], df["reference"])
+    ]
+    return df
+
 
 def compute_similarity(
     references: list[str],
     generated: list[str],
     batch_size: int = 64,
 ) -> list[float]:
-    """Cosine similarity between reference and generated answers via mpnet."""
     sbert = SentenceTransformer(MPNET_NAME)
     ref_emb = sbert.encode(references, batch_size=batch_size, show_progress_bar=True,
                            convert_to_tensor=True, normalize_embeddings=True)
@@ -158,17 +192,34 @@ def compute_similarity(
 # Summary
 # ──────────────────────────────────────────────
 
-def print_summary(df: pd.DataFrame):
-    print(f"\n{'='*60}")
-    print("EVALUATION SUMMARY — RAG (Phase 3)")
-    print(f"{'='*60}")
-    print(f"  Samples evaluated : {len(df):,}")
-    print(f"  Avg similarity    : {df['similarity'].mean():.4f}")
-    print(f"  Median similarity : {df['similarity'].median():.4f}")
-    print(f"  Std similarity    : {df['similarity'].std():.4f}")
-    print(f"  Min / Max         : {df['similarity'].min():.4f} / {df['similarity'].max():.4f}")
-    print(f"  Avg tokens gen    : {df['n_tokens'].mean():.1f}")
-    print(f"{'='*60}\n")
+def print_summary(label: str, bleu: float, df: pd.DataFrame) -> dict:
+    f1_mean  = df["f1"].mean()
+    sim_mean = df["similarity"].mean()
+    sim_med  = df["similarity"].median()
+    sim_std  = df["similarity"].std()
+
+    print(f"\n{'='*65}")
+    print(f"EVAL RESULTS — {label}")
+    print(f"{'='*65}")
+    print(f"  Samples          : {len(df):,}")
+    print(f"  BLEU             : {bleu:.2f}")
+    print(f"  Token-F1 (mean)  : {f1_mean:.4f}")
+    print(f"  SBERT sim (mean) : {sim_mean:.4f}")
+    print(f"  SBERT sim (med)  : {sim_med:.4f}")
+    print(f"  SBERT sim (std)  : {sim_std:.4f}")
+    print(f"  Avg tokens gen   : {df['n_tokens'].mean():.1f}")
+    print(f"{'='*65}\n")
+
+    return {
+        "label":      label,
+        "n":          len(df),
+        "bleu":       round(bleu, 4),
+        "f1_mean":    round(float(f1_mean), 4),
+        "sbert_mean": round(float(sim_mean), 4),
+        "sbert_med":  round(float(sim_med),  4),
+        "sbert_std":  round(float(sim_std),  4),
+        "avg_tokens": round(float(df["n_tokens"].mean()), 2),
+    }
 
 
 # ──────────────────────────────────────────────
@@ -261,16 +312,29 @@ def main():
 
     df = pd.DataFrame(rows)
 
-    # ── 5. Similarity scoring ─────────────────
-    print("\nComputing cosine similarity...")
+    # ── 5. BLEU ───────────────────────────────
+    print("\nComputing BLEU...")
+    bleu = compute_bleu(df)
+
+    # ── 6. Token-F1 ───────────────────────────
+    print("Computing token-F1...")
+    df = compute_f1_column(df)
+
+    # ── 7. SBERT similarity ───────────────────
+    print("Computing SBERT similarity...")
     df["similarity"] = compute_similarity(df["reference"].tolist(), df["generated"].tolist())
 
-    # ── 6. Summary + save ─────────────────────
-    print_summary(df)
+    # ── 8. Summary + save ─────────────────────
+    label = f"rag_k{args.k}_{os.path.basename(args.adapter_dir.rstrip('/'))}"
+    summary = print_summary(label, bleu, df)
 
     os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
     df.to_csv(args.save_path, index=False)
-    print(f"Results saved to {args.save_path}")
+    print(f"Per-sample results saved to {args.save_path}")
+
+    summary_path = args.save_path.replace(".csv", "_summary.csv")
+    pd.DataFrame([summary]).to_csv(summary_path, index=False)
+    print(f"Summary saved to {summary_path}")
 
 
 if __name__ == "__main__":
